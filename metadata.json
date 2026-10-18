@@ -1,0 +1,8 @@
+{
+  "name": "Traver Pakistan | Premium Tours & Travel Booking",
+  "description": "Discover Pakistan's most breathtaking destinations. Book luxury and adventurous tours to Hunza, Skardu, Fairy Meadows, and Swat with instant WhatsApp confirmation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

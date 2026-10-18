@@ -1,0 +1,91 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Security Helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'dawoodahmed0175@gmail.com' ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    // Tours Collection: Publicly readable if published, writeable only by Admin
+    match /tours/{tourId} {
+      allow read: if resource.data.published == true || isAdmin();
+      allow create: if isAdmin() && isValidId(tourId) &&
+        incoming().title is string && incoming().title.size() <= 150 &&
+        incoming().pricePerPerson is number && incoming().pricePerPerson > 0;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Booking Enquiries: Anyone can submit, users can view their own, Admin can manage all
+    match /booking_enquiries/{enquiryId} {
+      allow create: if isValidId(enquiryId) &&
+        incoming().tourId is string &&
+        incoming().travellerName is string && incoming().travellerName.size() <= 100 &&
+        incoming().travellerPhone is string && incoming().travellerPhone.size() <= 30 &&
+        incoming().travellerCount is number && incoming().travellerCount > 0 &&
+        incoming().quotedTotal is number && incoming().quotedTotal > 0 &&
+        incoming().status == 'Pending';
+      
+      allow get: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow list: if isAdmin() || (isSignedIn() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Contact Messages: Public submission, Admin management
+    match /contact_messages/{messageId} {
+      allow create: if isValidId(messageId) &&
+        incoming().name is string && incoming().name.size() <= 100 &&
+        incoming().email is string && incoming().email.size() <= 150 &&
+        incoming().message is string && incoming().message.size() <= 2000;
+      allow read, update, delete: if isAdmin();
+    }
+
+    // Users Collection: User reads/updates their own profile, Admin has full visibility
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        (incoming().role == 'user' || isAdmin());
+      allow update: if isSignedIn() && (
+        (request.auth.uid == userId && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'phone', 'updatedAt'])) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Newsletter Subscribers
+    match /newsletter_subscribers/{subId} {
+      allow create: if isValidId(subId) &&
+        incoming().email is string && incoming().email.size() <= 150;
+      allow read, update, delete: if isAdmin();
+    }
+  }
+}
